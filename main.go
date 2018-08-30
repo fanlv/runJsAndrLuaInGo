@@ -17,7 +17,7 @@ function testFun(tab)
 	result["key"] = "test"
 	result["key1"] = "val2"
 
-    if(tab["user"]=="fanlv")then
+    if(tab["user"]=="test")then
         result["title"]="good"
     end
     if(tab["os"]=="ios")then
@@ -32,7 +32,7 @@ end
 
 func main() {
 	dic := make(map[string]string)
-	dic["user"] = "fanlv"
+	dic["user"] = "test"
 	dic["os"] = "ios"
 	dic["version"] = "1.0"
 
@@ -87,7 +87,7 @@ function testFun(tab) {
 	result = {}
 	result["key"] = "test"
 	result["key1"] = "val2"
- 	if(tab["user"]=="fanlv"){
+ 	if(tab["user"]=="test"){
        result["title"]="good"
     }
     if(tab["os"]=="ios"){
