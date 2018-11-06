@@ -1,15 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/robertkrimen/otto"
+	"github.com/sirupsen/logrus"
 	"github.com/yuin/gluamapper"
 	"github.com/yuin/gopher-lua"
-	"time"
-	"github.com/sirupsen/logrus"
-	"strconv"
-	"encoding/json"
 	luajson "layeh.com/gopher-json"
+	"math"
+	"strconv"
+	"strings"
+	"time"
 )
 
 //function add(a, b)
@@ -20,14 +22,10 @@ function setKeyFunc(data)
   local json = require("json")
   local obj = {"a",1,"b",2,"c",3}
   local jsonStr = json.encode(obj)
-  print(data["json"])
-  local jsonObj = json.decode(data["json"])
-data["json"] = "1"
-   for k,v in pairs(jsonObj) do  
-       data[k] = v
-    end
+  local jsonObj = json.decode(jsonStr)
 
-  return data
+  obj = covertVersionToInt(data["version"])
+  return nil
 
 end
 `
@@ -61,6 +59,67 @@ func Double(L *lua.LState) int {
 	lv := L.ToInt(1)             /* get argument */
 	L.Push(lua.LNumber(lv * 2)) /* push result */
 	return 1                     /* number of results */
+}
+
+func covertVersionToInt(L *lua.LState) int {
+
+	start0 := time.Now()
+
+
+	versionStr := L.ToString(1) //1.10.1-alpha
+	if len(versionStr) == 0 {
+		logrus.Errorf("[covertVersionToInt] error  versionStr is nil ,versionStr : %s", versionStr)
+		L.Push(lua.LNumber(0))
+		return 1
+	}
+	numVersionArray := strings.Split(versionStr, "-")
+	numVersion := numVersionArray[0]
+	versionArray := strings.Split(numVersion, ".")
+	versionNum := 0
+	versionLen := len(versionArray)
+	for i := 0; i < versionLen; i++ {
+		vNum, err1 := strconv.Atoi(versionArray[versionLen-1-i])
+		if err1 != nil {
+			logrus.Errorf("[covertVersionToInt] covert version : %s to int fail. %d", versionStr, i)
+			L.Push(lua.LNumber(0))
+			return 1
+		}
+		versionNum += vNum * int(math.Pow10(3*i))
+	}
+	L.Push(lua.LNumber(versionNum))
+	tmp1 := time.Since(start0).Nanoseconds()
+	fmt.Println(tmp1)
+	return 1
+}
+
+
+
+func StrPad(input string, padLength int, padString string, padType string) string {
+	var output string
+
+	inputLength := len(input)
+	padStringLength := len(padString)
+
+	if inputLength >= padLength {
+		return input
+	}
+
+	repeat := math.Ceil(float64(1) + (float64(padLength-padStringLength))/float64(padStringLength))
+
+	switch padType {
+	case "RIGHT":
+		output = input + strings.Repeat(padString, int(repeat))
+		output = output[:padLength]
+	case "LEFT":
+		output = strings.Repeat(padString, int(repeat)) + input
+		output = output[len(output)-padLength:]
+	case "BOTH":
+		length := (float64(padLength - inputLength)) / float64(2)
+		repeat = math.Ceil(length / float64(padStringLength))
+		output = strings.Repeat(padString, int(repeat))[:int(math.Floor(float64(length)))] + input + strings.Repeat(padString, int(repeat))[:int(math.Ceil(float64(length)))]
+	}
+
+	return output
 }
 
 func getConfigForLua(L *lua.LState) int {
@@ -127,7 +186,9 @@ func main() {
 	dic := make(map[string]interface{})
 	//dic["userId"] = 6561193189653348615
 	dic["os"] = "ad"
-	dic["version"] = "1.0"
+	dic["version"] = "1.10.1-alpha"
+	//dic["version"] = ""
+
 	dic["json"]= "{\"Fid\":3,\"Key\":\"hello\",\"Value\":\"world\",\"AdministratorID\":1,\"CreateTime\":1539509193,\"Status\":0}"
 
 
@@ -142,7 +203,7 @@ func main() {
 	count := 10000
 	for i := 0; i < count; i++ {
 		LuaTest(dic)
-		fmt.Println(dic)
+		//fmt.Println(dic)
 	}
 	tmp1 := time.Since(start0).Nanoseconds() / 1000 / 1000
 
@@ -162,6 +223,7 @@ func LuaTest(dic map[string]interface{}) {
 	defer L.Close()
 	L.SetGlobal("getConfigForLua", L.NewFunction(getConfigForLua)) /* Original lua_setglobal uses stack... */
 	L.SetGlobal("authChatIDsForLua", L.NewFunction(authChatIDsForLua)) /* Original lua_setglobal uses stack... */
+	L.SetGlobal("covertVersionToInt", L.NewFunction(covertVersionToInt)) /* Original lua_setglobal uses stack... */
 
 	if err := L.DoString(luaCode); err != nil {
 		panic(err)
@@ -190,11 +252,11 @@ func LuaTest(dic map[string]interface{}) {
 	ret := L.Get(-1) // returned value
 	L.Pop(1)         // remove received value
 	obj := gluamapper.ToGoValue(ret, gluamapper.Option{NameFunc: getNameFunc})
-	obj1,err := convertMapStringInerfact(obj)
+	obj1,err := convertMapStringInterface(obj)
 	fmt.Println(obj1,err)
 }
 
-func convertMapStringInerfact(obj interface{})(interface{},error){
+func convertMapStringInterface(obj interface{})(interface{},error){
 
 	objDic, ok := obj.(map[interface{}]interface{})
 	if ok {
@@ -212,7 +274,7 @@ func convertMapStringInerfact(obj interface{})(interface{},error){
 	objArray, ok := obj.([]interface{})
 	result := make([]interface{},0,0)
 	for _, v := range objArray {
-		objResult,err := convertMapStringInerfact(v)
+		objResult,err := convertMapStringInterface(v)
 		if err != nil {
 			return nil,err
 		}
